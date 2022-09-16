@@ -103,7 +103,7 @@ def extract_links(source_text):
         source_text = source_text[:link_s] + surf + source_text[link_e:]
         shift += link_e - link_s - len(surf)
 
-        if "##" in m.group(1):
+        if "#" in m.group(1):  # 記事内の一部へのリンクは除去
             continue
         links.append({"span": span, "title": dst, "surf": surf})
 
