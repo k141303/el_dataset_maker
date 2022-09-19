@@ -103,7 +103,7 @@ def extract_links(source_text):
         source_text = source_text[:link_s] + surf + source_text[link_e:]
         shift += link_e - link_s - len(surf)
 
-        if "##" in m.group(1):
+        if "#" in m.group(1):
             continue
         links.append({"span": span, "title": dst, "surf": surf})
 
@@ -134,14 +134,22 @@ def process(inputs):
     return parse(*inputs)
 
 
+def load_file(file_path):
+    with gzip.open(file_path, mode="rt") as f:
+        for header in f:
+            context = next(f)
+            yield (header, context)
+
+
+def save_jsonl(inputs):
+    data, i, output_dir = inputs
+    output_path = os.path.join(output_dir, f"{i}.json")
+    with open(output_path, "w") as f:
+        f.write("\n".join(data))
+
+
 def main():
     args = load_args()
-
-    def load_file(file_path):
-        with gzip.open(file_path, mode="rt") as f:
-            for header in f:
-                context = next(f)
-                yield (header, context)
 
     data = []
     with Pool(multi.cpu_count() - 1) as p, tqdm.tqdm() as t:
@@ -149,12 +157,14 @@ def main():
             data.append(d)
             t.update()
 
-    output_name, _ = os.path.splitext(os.path.basename(args.cirrus_path))
-    output_path = os.path.join(args.output_dir, output_name)
-    os.makedirs(args.output_dir, exist_ok=True)
+    sub_dir, _ = os.path.splitext(os.path.basename(args.cirrus_path))
+    output_dir = os.path.join(args.output_dir, sub_dir)
+    os.makedirs(output_dir, exist_ok=True)
 
-    with open(output_path, "w") as f:
-        f.write("\n".join(data))
+    sep_data = [(data[i : i + 1000], i // 1000, output_dir) for i in range(0, len(data), 1000)]
+    with Pool(multi.cpu_count() - 1) as p, tqdm.tqdm(desc="Saving", total=len(sep_data)) as t:
+        for _ in p.imap(save_jsonl, sep_data):
+            t.update()
 
 
 if __name__ == "__main__":
