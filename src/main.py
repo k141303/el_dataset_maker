@@ -98,7 +98,7 @@ def extract_links(source_text):
         else:
             dst, surf = m.group(1), m.group(1)
 
-        if surf.strip() == 0:
+        if len(surf.strip()) == 0:
             source_text = source_text[:link_s] + source_text[link_e:]
             shift += link_e - link_s
             continue
@@ -130,10 +130,11 @@ def parse(header, context):
     d["pageid"] = header["index"]["_id"]
     d["title"] = context["title"]
     d["redirect"] = context["redirect"]
+    d["text"] = context["text"]
 
     source_text = context["source_text"]
     source_text = clean_source_text(source_text)
-    d["text"], d["link"] = extract_links(source_text)
+    d["source_text"], d["link"] = extract_links(source_text)
 
     return json.dumps(d, ensure_ascii=False)
 
