@@ -70,8 +70,12 @@ def clean_source_text(source_text):
     source_text = remove_nested_brackets(source_text, start="\{\{", end="\}\}")  # スクリプトの削除
     source_text = remove_nested_brackets(source_text, start="\{\|", end="\|\}")  # スクリプトの削除
     source_text = re.sub("<[^>]*?/>", "", source_text)  # 独立したHTMLタグの削除
-    source_text = remove_nested_brackets(source_text, start="<ref.*?>", end="</ref>")  # refタグセットと内部の削除
-    source_text = remove_nested_brackets(source_text, start="<script.*?>", end="</script>")  # スクリプトの削除
+    source_text = remove_nested_brackets(
+        source_text, start="<ref.*?>", end="</ref>"
+    )  # refタグセットと内部の削除
+    source_text = remove_nested_brackets(
+        source_text, start="<script.*?>", end="</script>"
+    )  # スクリプトの削除
     # source_text = remove_nested_brackets(source_text, start="<span.*?>", end="</span>")  # spanタグセットと内部の削除
     source_text = remove_nested_brackets(source_text, start="<table.*?>", end="</table>")  # テーブルの削除
     source_text = remove_nested_brackets(source_text, start="<div.*?>", end="</div>")  # テーブルの削除
