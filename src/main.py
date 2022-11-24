@@ -137,6 +137,8 @@ def parse(header, context):
 
     d = {}
     d["pageid"] = header["index"]["_id"]
+    if not str(d["pageid"]).isdigit():
+        return None
     d["title"] = context["title"]
     d["redirect"] = context["redirect"]
     d["text"] = context["text"]
@@ -227,8 +229,11 @@ def main():
     args = load_args()
 
     data = []
-    with Pool(multi.cpu_count()) as p, tqdm.tqdm() as t:
-        for d in p.imap(process, load_file(args.cirrus_path), chunksize=50):
+
+    with Pool(multi.cpu_count() - 1) as p, tqdm.tqdm() as t:
+        for d in p.imap(process, load_file(args.cirrus_path), chunksize=500):
+            if d is None:
+                continue
             data.append(d)
             if args.debug_mode and len(data) >= 1000:
                 break
