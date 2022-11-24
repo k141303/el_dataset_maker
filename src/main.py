@@ -1,5 +1,6 @@
 import re
 import os
+import bisect
 
 import gzip
 import json
@@ -11,11 +12,15 @@ import multiprocessing as multi
 
 import tqdm
 
+from liat_ml_roberta import RoBERTaTokenizer
+
 
 def load_args():
     parser = argparse.ArgumentParser(description="CirrusDumpからEntityLinkingデータセットを作成")
     parser.add_argument("cirrus_path", help="CirrusDumpのパス")
     parser.add_argument("--output_dir", default="dataset")
+    parser.add_argument("--model_name", default="roberta_base_ja_20190121_m10000_v24000_u125000")
+    parser.add_argument("--debug_mode", action="store_true")
     return parser.parse_args()
 
 
@@ -140,7 +145,7 @@ def parse(header, context):
     source_text = clean_source_text(source_text)
     d["source_text"], d["link"] = extract_links(source_text)
 
-    return json.dumps(d, ensure_ascii=False)
+    return d
 
 
 def process(inputs):
@@ -154,30 +159,96 @@ def load_file(file_path):
             yield (header, context)
 
 
-def save_jsonl(inputs):
-    data, i, output_dir = inputs
-    output_path = os.path.join(output_dir, f"{i}.json")
+def save_jsonl(output_path, data):
     with open(output_path, "w") as f:
-        f.write("\n".join(data))
+        json_dumps = lambda x: json.dumps(x, ensure_ascii=False)
+        f.write("\n".join(map(json_dumps, data)))
+
+
+def tokenize(inputs):
+    data, data_id, output_dir, model_name = inputs
+
+    tokenizer = RoBERTaTokenizer.from_pretrained(model_name)
+
+    checks = []
+    for d in data:
+        # トークナイズの際に空白が削除されてしまうためオフセットを合わせる。
+        space_offsets = [0]
+        for m in re.finditer("\s", d["source_text"]):
+            space_offsets.append(m.span(0)[1])
+
+        tmp = re.sub("\s", "", d["source_text"])
+        for i in range(len(d["link"])):
+            link = d["link"][i]
+            link["span"][0] -= bisect.bisect_right(space_offsets, link["span"][0]) - 1
+            link["span"][1] -= bisect.bisect_right(space_offsets, link["span"][1]) - 1
+
+            surf = re.sub("\s", "", link["surf"])
+            span = tmp[link["span"][0] : link["span"][1]]
+            assert surf == span, f"{surf} != {span}"
+
+        # トークナイズ
+        text = re.sub("@@", "@2", d["text"])
+        source_text = re.sub("@@", "@2", d["source_text"])
+        d["entity_tokens"] = tokenizer.tokenize(text)[:512]
+        d["mention_tokens"] = tokenizer.tokenize(source_text)
+
+        # リンクスパンをトークンスパンにマップ
+        rm_head = lambda token: re.sub("@@$", "", token)
+        orig_tokens = list(map(rm_head, d["mention_tokens"]))
+
+        d["offset"] = [0]
+        for token in orig_tokens:
+            d["offset"].append(d["offset"][-1] + len(token))
+
+        for link in d["link"]:
+            s_off = bisect.bisect_left(d["offset"], link["span"][0])
+            if d["offset"][s_off] != link["span"][0]:
+                s_off -= 1
+            e_off = bisect.bisect_left(d["offset"], link["span"][1])
+
+            link["token_span"] = [s_off, e_off]
+
+            try:
+                check = (
+                    d["offset"][s_off] != link["span"][0] or d["offset"][e_off] != link["span"][1]
+                )
+            except IndexError:
+                assert False, (d["title"], d["text"][-50:], link)
+            checks.append(check)
+
+    output_path = os.path.join(output_dir, f"{data_id}.json")
+    save_jsonl(output_path, data)
+
+    return checks
 
 
 def main():
     args = load_args()
 
     data = []
-    with Pool(multi.cpu_count() - 1) as p, tqdm.tqdm() as t:
-        for d in p.imap(process, load_file(args.cirrus_path)):
+    with Pool(multi.cpu_count()) as p, tqdm.tqdm() as t:
+        for d in p.imap(process, load_file(args.cirrus_path), chunksize=50):
             data.append(d)
+            if args.debug_mode and len(data) >= 1000:
+                break
             t.update()
 
     sub_dir, _ = os.path.splitext(os.path.basename(args.cirrus_path))
     output_dir = os.path.join(args.output_dir, sub_dir)
     os.makedirs(output_dir, exist_ok=True)
 
-    sep_data = [(data[i : i + 1000], i // 1000, output_dir) for i in range(0, len(data), 1000)]
-    with Pool(multi.cpu_count() - 1) as p, tqdm.tqdm(desc="Saving", total=len(sep_data)) as t:
-        for _ in p.imap(save_jsonl, sep_data):
+    n = 1000
+    tasks = [(data[i : i + n], i // n, output_dir, args.model_name) for i in range(0, len(data), n)]
+
+    checks = []
+    with Pool(multi.cpu_count()) as p, tqdm.tqdm(desc="Tokenizing", total=len(tasks)) as t:
+        for _checks in p.imap_unordered(tokenize, tasks):
             t.update()
+            checks += _checks
+
+    offset_mismatch_rate = sum(checks) / len(checks) * 100
+    print(f"Offset mismatch rate: {offset_mismatch_rate:.2f}%")
 
 
 if __name__ == "__main__":
