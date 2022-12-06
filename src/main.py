@@ -217,6 +217,15 @@ def tokenize(inputs):
                 assert False, (d["title"], d["text"][-50:], link)
             checks.append(check)
 
+        d["entity_token_ids"] = tokenizer.convert_tokens_to_ids(d["entity_tokens"])
+        d["mention_token_ids"] = tokenizer.convert_tokens_to_ids(d["mention_tokens"])
+
+        del d["text"]
+        del d["source_text"]
+        del d["offset"]
+        del d["entity_tokens"]
+        del d["mention_tokens"]
+
     output_path = os.path.join(output_dir, f"{data_id}.json")
     save_jsonl(output_path, data)
 
@@ -228,9 +237,9 @@ def main():
 
     data = []
     with Pool(multi.cpu_count()) as p, tqdm.tqdm() as t:
-        for d in p.imap(process, load_file(args.cirrus_path), chunksize=50):
+        for d in p.imap(process, load_file(args.cirrus_path), chunksize=100):
             data.append(d)
-            if args.debug_mode and len(data) >= 1000:
+            if args.debug_mode and len(data) >= 2000:
                 break
             t.update()
 
@@ -238,7 +247,9 @@ def main():
     output_dir = os.path.join(args.output_dir, sub_dir)
     os.makedirs(output_dir, exist_ok=True)
 
-    n = 1000
+    n = 5000
+    if args.debug_mode:
+        n = 100
     tasks = [(data[i : i + n], i // n, output_dir, args.model_name) for i in range(0, len(data), n)]
 
     checks = []
