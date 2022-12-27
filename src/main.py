@@ -7,6 +7,8 @@ import json
 
 import argparse
 
+from collections import Counter
+
 from multiprocessing import Pool
 import multiprocessing as multi
 
@@ -246,6 +248,24 @@ def main():
             if args.debug_mode and len(data) >= 2000:
                 break
             t.update()
+
+    title2pageid = {}
+    for d in data:
+        title2pageid[d["title"]] = d["pageid"]
+        for red in d["redirect"]:
+            title2pageid[red["title"]] = d["pageid"]
+        del d["redirect"]
+
+    link_count = Counter()
+    for d in data:
+        for link in d["link"]:
+            link["pageid"] = title2pageid.get(link["title"])
+            if link["pageid"] is not None:
+                link_count[link["pageid"]] += 1
+
+    for d in data:
+        for link in d["link"]:
+            link["cnt"] = link_count[link["pageid"]]
 
     sub_dir, _ = os.path.splitext(os.path.basename(args.cirrus_path))
     output_dir = os.path.join(args.output_dir, sub_dir)
