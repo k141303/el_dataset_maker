@@ -254,7 +254,6 @@ def main():
         title2pageid[d["title"]] = d["pageid"]
         for red in d["redirect"]:
             title2pageid[red["title"]] = d["pageid"]
-        del d["redirect"]
 
     link_count = Counter()
     for d in data:
