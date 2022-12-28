@@ -264,8 +264,7 @@ def main():
                 link_count[link["pageid"]] += 1
 
     for d in data:
-        for link in d["link"]:
-            link["cnt"] = link_count[link["pageid"]]
+        d["count"] = link_count.get(d["pageid"], 0)
 
     sub_dir, _ = os.path.splitext(os.path.basename(args.cirrus_path))
     output_dir = os.path.join(args.output_dir, sub_dir)
