@@ -84,8 +84,9 @@ def clean_source_text(source_text):
         source_text, start="<script.*?>", end="</script>"
     )  # スクリプトの削除
     # source_text = remove_nested_brackets(source_text, start="<span.*?>", end="</span>")  # spanタグセットと内部の削除
-    source_text = remove_nested_brackets(source_text, start="<table.*?>", end="</table>")  # テーブルの削除
-    source_text = remove_nested_brackets(source_text, start="<div.*?>", end="</div>")  # テーブルの削除
+    # source_text = remove_nested_brackets(source_text, start="<table.*?>", end="</table>")  # テーブルの削除
+    source_text = re.sub("</?(tr|td|th|div).*?>", " ", source_text)  # 表の罫線等を空白に変換
+    # source_text = remove_nested_brackets(source_text, start="<div.*?>", end="</div>")  # テーブルの削除
     source_text = remove_nested_brackets(source_text, start="<score.*?>", end="</score>")  # テーブルの削除
     source_text = re.sub("<.*?>", "", source_text)  # HTMLタグの削除
     source_text = remove_nested_brackets(source_text, start="<!--", end="-->")  # コメントの削除
