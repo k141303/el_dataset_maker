@@ -54,9 +54,7 @@ def clean_line_level(sentence):
     clean_sentence = []
     for line in sentence.splitlines():
         line = line.strip()
-        m = re.match("^:*?(\*|#)", line)
-        if m is not None:  # 箇条書きは除去
-            continue
+        line = re.sub("^:*?(\*|#)", " ・ ", line)  # 箇条書きの置換
         line = re.sub("'''", "", line)  # 強調記号の削除
         line = re.sub("''", "", line)  # 斜線記号の削除
         line = re.sub("([^\[]|^)\[[^\[\]].*?\]([^\]]|$)", "\\1\\2", line)  # 連続しない角括弧に囲まれた範囲を削除
