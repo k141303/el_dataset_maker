@@ -73,7 +73,12 @@ def clean_line_level(sentence):
     return "".join(clean_sentence)
 
 
-def clean_source_text(source_text):
+def replace_first_emphasis_to_self_link(source_text, title):
+    source_text = re.sub("'''(.*?)'''", f"[[\\1|{title}]]", source_text, 1)
+    return source_text
+
+
+def clean_source_text(source_text, title):
     source_text = remove_nested_brackets(source_text, start="\{\{", end="\}\}")  # スクリプトの削除
     source_text = remove_nested_brackets(source_text, start="\{\|", end="\|\}")  # スクリプトの削除
     source_text = re.sub("<[^>]*?/>", "", source_text)  # 独立したHTMLタグの削除
@@ -91,6 +96,7 @@ def clean_source_text(source_text):
     source_text = re.sub("<.*?>", "", source_text)  # HTMLタグの削除
     source_text = remove_nested_brackets(source_text, start="<!--", end="-->")  # コメントの削除
 
+    source_text = replace_first_emphasis_to_self_link(source_text, title)
     source_text = clean_line_level(source_text)
     return source_text
 
@@ -147,7 +153,7 @@ def parse(header, context):
     d["text"] = context["text"]
 
     source_text = context["source_text"]
-    source_text = clean_source_text(source_text)
+    source_text = clean_source_text(source_text, d["title"])
     d["source_text"], d["link"] = extract_links(source_text)
 
     return d
