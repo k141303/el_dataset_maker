@@ -72,7 +72,7 @@ def clean_line_level(sentence):
 
 
 def replace_first_emphasis_to_self_link(source_text, title):
-    m = re.match("[.\s]*?('''(.*?)''')", source_text)
+    m = re.search("('''(.*?)''')", source_text)
     if m is not None:
         s, e = m.span(1)
         source_text = source_text[:s] + f"[[{m.group(2)}|{title}]]" + source_text[e:]
@@ -277,7 +277,7 @@ def main():
     output_dir = os.path.join(args.output_dir, sub_dir)
     os.makedirs(output_dir, exist_ok=True)
 
-    n = 5000
+    n = 2000
     if args.debug_mode:
         n = 100
     tasks = [(data[i : i + n], i // n, output_dir, args.model_name) for i in range(0, len(data), n)]
