@@ -75,7 +75,7 @@ def replace_first_emphasis_to_self_link(source_text, title):
     m = re.search("('''(.*?)''')", source_text)
     if m is not None:
         s, e = m.span(1)
-        source_text = source_text[:s] + f"[[{m.group(2)}|{title}]]" + source_text[e:]
+        source_text = source_text[:s] + f"[[{title}|{m.group(2)}]]" + source_text[e:]
     return source_text
 
 
