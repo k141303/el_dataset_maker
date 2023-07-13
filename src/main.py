@@ -72,10 +72,28 @@ def clean_line_level(sentence):
 
 
 def replace_first_emphasis_to_self_link(source_text, title):
-    m = re.search("('''(.*?)''')", source_text)
-    if m is not None:
+    m = re.search("'''.*?\n", source_text)
+    if m is None:
+        return source_text
+
+    s, e = m.span(0)
+    first_sentence, post_sentence = source_text[:e], source_text[e:]
+
+    for m in reversed([*re.finditer("('''(.*?)''')", source_text)]):
         s, e = m.span(1)
         source_text = source_text[:s] + f"[[{title}|{m.group(2)}]]" + source_text[e:]
+    return source_text
+
+
+def replace_first_yomigana_to_self_link(source_text, title):
+    m = re.search("'''[\s\(（]+([\u3041-\u309F\u30A0-\u30FF\s]+)", source_text)
+    if m is None:
+        return source_text
+
+    s, e = m.span(1)
+    if len(m.group(1).strip()) > 0:
+        source_text = source_text[:s] + f"[[{title}|{m.group(1)}]]" + source_text[e:]
+
     return source_text
 
 
@@ -83,12 +101,8 @@ def clean_source_text(source_text, title):
     source_text = remove_nested_brackets(source_text, start="\{\{", end="\}\}")  # スクリプトの削除
     source_text = remove_nested_brackets(source_text, start="\{\|", end="\|\}")  # スクリプトの削除
     source_text = re.sub("<[^>]*?/>", "", source_text)  # 独立したHTMLタグの削除
-    source_text = remove_nested_brackets(
-        source_text, start="<ref.*?>", end="</ref>"
-    )  # refタグセットと内部の削除
-    source_text = remove_nested_brackets(
-        source_text, start="<script.*?>", end="</script>"
-    )  # スクリプトの削除
+    source_text = remove_nested_brackets(source_text, start="<ref.*?>", end="</ref>")  # refタグセットと内部の削除
+    source_text = remove_nested_brackets(source_text, start="<script.*?>", end="</script>")  # スクリプトの削除
     # source_text = remove_nested_brackets(source_text, start="<span.*?>", end="</span>")  # spanタグセットと内部の削除
     # source_text = remove_nested_brackets(source_text, start="<table.*?>", end="</table>")  # テーブルの削除
     source_text = re.sub("</?(tr|td|th|div).*?>", " ", source_text)  # 表の罫線等を空白に変換
@@ -97,6 +111,7 @@ def clean_source_text(source_text, title):
     source_text = re.sub("<.*?>", "", source_text)  # HTMLタグの削除
     source_text = remove_nested_brackets(source_text, start="<!--", end="-->")  # コメントの削除
 
+    source_text = replace_first_yomigana_to_self_link(source_text, title)
     source_text = replace_first_emphasis_to_self_link(source_text, title)
     source_text = clean_line_level(source_text)
     return source_text
@@ -222,9 +237,7 @@ def tokenize(inputs):
             link["token_span"] = [s_off, e_off]
 
             try:
-                check = (
-                    d["offset"][s_off] != link["span"][0] or d["offset"][e_off] != link["span"][1]
-                )
+                check = d["offset"][s_off] != link["span"][0] or d["offset"][e_off] != link["span"][1]
             except IndexError:
                 assert False, (d["title"], d["text"][-50:], link)
             checks.append(check)
@@ -253,7 +266,7 @@ def main():
             if d is None:
                 continue
             data.append(d)
-            if args.debug_mode and len(data) >= 2000:
+            if args.debug_mode and len(data) >= 100000:
                 break
             t.update()
 
@@ -278,8 +291,6 @@ def main():
     os.makedirs(output_dir, exist_ok=True)
 
     n = 2000
-    if args.debug_mode:
-        n = 100
     tasks = [(data[i : i + n], i // n, output_dir, args.model_name) for i in range(0, len(data), n)]
 
     checks = []
