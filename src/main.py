@@ -72,14 +72,8 @@ def clean_line_level(sentence):
 
 
 def replace_first_emphasis_to_self_link(source_text, title):
-    m = re.search("'''.*?\n", source_text)
-    if m is None:
-        return source_text
-
-    s, e = m.span(0)
-    first_sentence, post_sentence = source_text[:e], source_text[e:]
-
-    for m in reversed([*re.finditer("('''(.*?)''')", source_text)]):
+    m = re.search("('''(.*?)''')", source_text)
+    if m is not None:
         s, e = m.span(1)
         source_text = source_text[:s] + f"[[{title}|{m.group(2)}]]" + source_text[e:]
     return source_text
@@ -112,7 +106,7 @@ def clean_source_text(source_text, title):
     source_text = remove_nested_brackets(source_text, start="<!--", end="-->")  # コメントの削除
 
     source_text = replace_first_yomigana_to_self_link(source_text, title)
-    # source_text = replace_first_emphasis_to_self_link(source_text, title)
+    source_text = replace_first_emphasis_to_self_link(source_text, title)
     source_text = clean_line_level(source_text)
     return source_text
 
