@@ -112,7 +112,7 @@ def clean_source_text(source_text, title):
     source_text = remove_nested_brackets(source_text, start="<!--", end="-->")  # コメントの削除
 
     source_text = replace_first_yomigana_to_self_link(source_text, title)
-    source_text = replace_first_emphasis_to_self_link(source_text, title)
+    # source_text = replace_first_emphasis_to_self_link(source_text, title)
     source_text = clean_line_level(source_text)
     return source_text
 
