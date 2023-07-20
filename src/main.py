@@ -26,25 +26,31 @@ def load_args():
     return parser.parse_args()
 
 
-def remove_nested_brackets(sentence, start="\{\{", end="\}\}"):
-    offsets = [(m.span(0)[0], 1) for m in re.finditer(start, sentence)]
-    offsets += [(m.span(0)[1], -1) for m in re.finditer(end, sentence)]
-    offsets = sorted(offsets, key=lambda x: x[0])
+def remove_nested_brackets(sentence, start="\{\{", end="\}\}", level=1):
+    offsets = [(*m.span(0), 1) for m in re.finditer(start, sentence)]
+    offsets += [(*m.span(0), -1) for m in re.finditer(end, sentence)]
+    offsets = sorted(offsets, key=lambda x: (x[0]))
 
     nest = 0
+    max_level = 0
     spans = []
-    for cur, flag in offsets:
+    for s, e, flag in offsets:
         if nest == 0:
             if flag < 0:
                 continue
-            spans.append([cur])
+            spans.append([s])
         nest += flag
+        if nest > max_level:
+            max_level = nest
         if nest == 0:
-            spans[-1].append(cur)
+            spans[-1] += [e, max_level]
+            max_level = 0
 
-    spans = [span for span in spans if len(span) == 2]
+    spans = [span for span in spans if len(span) == 3]
 
-    for s, e in reversed(spans):
+    for s, e, max_level in reversed(spans):
+        if max_level < level:
+            continue
         sentence = sentence[:s] + sentence[e:]
 
     return sentence
@@ -80,13 +86,21 @@ def replace_first_emphasis_to_self_link(source_text, title):
 
 
 def replace_first_yomigana_to_self_link(source_text, title):
-    m = re.search("'''[\s\(（]+([\u3041-\u309F\u30A0-\u30FF\s]+)", source_text)
+    m = re.search("'''.*?'''\s*[\(（](.*?)[\)）]", source_text)
     if m is None:
         return source_text
 
     s, e = m.span(1)
-    if len(m.group(1).strip()) > 0:
-        source_text = source_text[:s] + f"[[{title}|{m.group(1)}]]" + source_text[e:]
+    text = ""
+    for yomi in re.split("([、:：])", m.group(1)):
+        yomi = yomi.strip()
+        m = re.match("^[a-zA-Z\d\u3041-\u309F\u30A0-\u30FF\s]+$", yomi)
+        if m is None:
+            text += yomi
+            continue
+        text += f"[[{title}|{yomi}]]"
+
+    source_text = source_text[:s] + text + source_text[e:]
 
     return source_text
 
@@ -94,6 +108,7 @@ def replace_first_yomigana_to_self_link(source_text, title):
 def clean_source_text(source_text, title):
     source_text = remove_nested_brackets(source_text, start="\{\{", end="\}\}")  # スクリプトの削除
     source_text = remove_nested_brackets(source_text, start="\{\|", end="\|\}")  # スクリプトの削除
+    source_text = remove_nested_brackets(source_text, start="\[\[", end="\]\]", level=2)  # ネストされたリンクの削除
     source_text = re.sub("<[^>]*?/>", "", source_text)  # 独立したHTMLタグの削除
     source_text = remove_nested_brackets(source_text, start="<ref.*?>", end="</ref>")  # refタグセットと内部の削除
     source_text = remove_nested_brackets(source_text, start="<script.*?>", end="</script>")  # スクリプトの削除
