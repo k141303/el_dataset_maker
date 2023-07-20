@@ -86,7 +86,7 @@ def replace_first_emphasis_to_self_link(source_text, title):
 
 
 def replace_first_yomigana_to_self_link(source_text, title):
-    m = re.search("'''.*?'''\s*[\(（](.*?)[\)）]", source_text)
+    m = re.search("'''.*?'''\s*[』」]?\s*[\(（](.*?)[\)）]", source_text)
     if m is None:
         return source_text
 
@@ -94,7 +94,7 @@ def replace_first_yomigana_to_self_link(source_text, title):
     text = ""
     for yomi in re.split("([、:：])", m.group(1)):
         yomi = yomi.strip()
-        m = re.match("^[a-zA-Z\d\u3041-\u309F\u30A0-\u30FF\s]+$", yomi)
+        m = re.match("^[\-.,'a-zA-Z\d\u3041-\u309F\u30A0-\u30FF\s]+$", yomi)
         if m is None:
             text += yomi
             continue
