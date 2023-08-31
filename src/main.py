@@ -258,7 +258,7 @@ def tokenize(inputs):
         del d["source_text"]
         del d["offset"]
         del d["entity_tokens"]
-        del d["mention_tokens"]
+        d["mention_tokens"]
 
     output_path = os.path.join(output_dir, f"{data_id}.json")
     save_jsonl(output_path, data)
@@ -289,7 +289,7 @@ def main():
     for d in data:
         for link in d["link"]:
             link["pageid"] = title2pageid.get(link["title"])
-            if link["pageid"] is not None:
+            if link["pageid"] is not None and d["link"]:
                 link_count[link["pageid"]] += 1
 
     for d in data:
