@@ -21,7 +21,9 @@ def load_args():
     parser = argparse.ArgumentParser(description="CirrusDumpからEntityLinkingデータセットを作成")
     parser.add_argument("cirrus_path", help="CirrusDumpのパス")
     parser.add_argument("--output_dir", default="dataset")
-    parser.add_argument("--model_name", default="roberta_base_ja_20190121_m10000_v24000_u125000")
+    parser.add_argument(
+        "--model_name", default="roberta_base_ja_20190121_m10000_v24000_u125000"
+    )
     parser.add_argument("--debug_mode", action="store_true")
     return parser.parse_args()
 
@@ -63,7 +65,9 @@ def clean_line_level(sentence):
         line = re.sub("^:*?(\*|#)", " ・ ", line)  # 箇条書きの置換
         line = re.sub("'''", "", line)  # 強調記号の削除
         line = re.sub("''", "", line)  # 斜線記号の削除
-        line = re.sub("([^\[]|^)\[[^\[\]].*?\]([^\]]|$)", "\\1\\2", line)  # 連続しない角括弧に囲まれた範囲を削除
+        line = re.sub(
+            "([^\[]|^)\[[^\[\]].*?\]([^\]]|$)", "\\1\\2", line
+        )  # 連続しない角括弧に囲まれた範囲を削除
         # line = re.sub("\[http.*?\]", "", line)  # 外部リンクの削除
         line = re.sub("\[\[Category.*?\]\]", "", line)  # カテゴリーの削除
         line = re.sub("\[\[(File|Image|画像):.*?\]\]", "", line)  # ファイルの削除
@@ -77,12 +81,14 @@ def clean_line_level(sentence):
     return "".join(clean_sentence)
 
 
-def replace_first_emphasis_to_self_link(source_text, title):
+def replace_first_bold_to_self_link(source_text, title):
     m = re.search("('''(.*?)''')", source_text)
     if m is not None:
         s, e = m.span(1)
         source_text = source_text[:s] + f"[[{title}|{m.group(2)}]]" + source_text[e:]
-    return source_text
+        first_bold_surf = m.group(2)
+        return source_text, first_bold_surf
+    return source_text, None
 
 
 def replace_first_yomigana_to_self_link(source_text, title):
@@ -92,10 +98,12 @@ def replace_first_yomigana_to_self_link(source_text, title):
 
     s, e = m.span(1)
     text = ""
-    for yomi in re.split("([、:：])", m.group(1)):
+    for yomi in re.split("([、,:：;])", m.group(1)):
         yomi = yomi.strip()
-        m = re.match("^[\-.,'a-zA-Z\d\u3041-\u309F\u30A0-\u30FF\s]+$", yomi)
-        if m is None:
+        kigou = re.search("([、,:：;])", yomi)
+        link = re.search("\[\[.*?\]\]", yomi)
+        number = re.search("\d", yomi)
+        if link is not None or kigou is not None or number is not None:
             text += yomi
             continue
         text += f"[[{title}|{yomi}]]"
@@ -106,24 +114,36 @@ def replace_first_yomigana_to_self_link(source_text, title):
 
 
 def clean_source_text(source_text, title):
-    source_text = remove_nested_brackets(source_text, start="\{\{", end="\}\}")  # スクリプトの削除
-    source_text = remove_nested_brackets(source_text, start="\{\|", end="\|\}")  # スクリプトの削除
-    source_text = remove_nested_brackets(source_text, start="\[\[", end="\]\]", level=2)  # ネストされたリンクの削除
+    source_text = remove_nested_brackets(
+        source_text, start="\{\{", end="\}\}"
+    )  # スクリプトの削除
+    source_text = remove_nested_brackets(
+        source_text, start="\{\|", end="\|\}"
+    )  # スクリプトの削除
+    source_text = remove_nested_brackets(
+        source_text, start="\[\[", end="\]\]", level=2
+    )  # ネストされたリンクの削除
     source_text = re.sub("<[^>]*?/>", "", source_text)  # 独立したHTMLタグの削除
-    source_text = remove_nested_brackets(source_text, start="<ref.*?>", end="</ref>")  # refタグセットと内部の削除
-    source_text = remove_nested_brackets(source_text, start="<script.*?>", end="</script>")  # スクリプトの削除
+    source_text = remove_nested_brackets(
+        source_text, start="<ref.*?>", end="</ref>"
+    )  # refタグセットと内部の削除
+    source_text = remove_nested_brackets(
+        source_text, start="<script.*?>", end="</script>"
+    )  # スクリプトの削除
     # source_text = remove_nested_brackets(source_text, start="<span.*?>", end="</span>")  # spanタグセットと内部の削除
     # source_text = remove_nested_brackets(source_text, start="<table.*?>", end="</table>")  # テーブルの削除
     source_text = re.sub("</?(tr|td|th|div).*?>", " ", source_text)  # 表の罫線等を空白に変換
     # source_text = remove_nested_brackets(source_text, start="<div.*?>", end="</div>")  # テーブルの削除
-    source_text = remove_nested_brackets(source_text, start="<score.*?>", end="</score>")  # テーブルの削除
+    source_text = remove_nested_brackets(
+        source_text, start="<score.*?>", end="</score>"
+    )  # テーブルの削除
     source_text = re.sub("<.*?>", "", source_text)  # HTMLタグの削除
     source_text = remove_nested_brackets(source_text, start="<!--", end="-->")  # コメントの削除
 
     source_text = replace_first_yomigana_to_self_link(source_text, title)
-    source_text = replace_first_emphasis_to_self_link(source_text, title)
+    source_text, first_bold_surf = replace_first_bold_to_self_link(source_text, title)
     source_text = clean_line_level(source_text)
-    return source_text
+    return source_text, first_bold_surf
 
 
 def extract_links(source_text):
@@ -178,7 +198,7 @@ def parse(header, context):
     d["text"] = context["text"]
 
     source_text = context["source_text"]
-    source_text = clean_source_text(source_text, d["title"])
+    source_text, d["first_bold_surf"] = clean_source_text(source_text, d["title"])
     d["source_text"], d["link"] = extract_links(source_text)
 
     return d
@@ -246,7 +266,10 @@ def tokenize(inputs):
             link["token_span"] = [s_off, e_off]
 
             try:
-                check = d["offset"][s_off] != link["span"][0] or d["offset"][e_off] != link["span"][1]
+                check = (
+                    d["offset"][s_off] != link["span"][0]
+                    or d["offset"][e_off] != link["span"][1]
+                )
             except IndexError:
                 assert False, (d["title"], d["text"][-50:], link)
             checks.append(check)
@@ -255,10 +278,7 @@ def tokenize(inputs):
         d["mention_token_ids"] = tokenizer.convert_tokens_to_ids(d["mention_tokens"])
 
         del d["text"]
-        del d["source_text"]
-        del d["offset"]
         del d["entity_tokens"]
-        d["mention_tokens"]
 
     output_path = os.path.join(output_dir, f"{data_id}.json")
     save_jsonl(output_path, data)
@@ -300,10 +320,15 @@ def main():
     os.makedirs(output_dir, exist_ok=True)
 
     n = 2000
-    tasks = [(data[i : i + n], i // n, output_dir, args.model_name) for i in range(0, len(data), n)]
+    tasks = [
+        (data[i : i + n], i // n, output_dir, args.model_name)
+        for i in range(0, len(data), n)
+    ]
 
     checks = []
-    with Pool(multi.cpu_count()) as p, tqdm.tqdm(desc="Tokenizing", total=len(tasks)) as t:
+    with Pool(multi.cpu_count()) as p, tqdm.tqdm(
+        desc="Tokenizing", total=len(tasks)
+    ) as t:
         for _checks in p.imap_unordered(tokenize, tasks):
             t.update()
             checks += _checks
