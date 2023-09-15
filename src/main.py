@@ -1,6 +1,7 @@
 import re
 import os
 import bisect
+from copy import deepcopy
 
 import gzip
 import json
@@ -233,14 +234,21 @@ def tokenize(inputs):
         for m in re.finditer("\s", d["source_text"]):
             space_offsets.append(m.span(0)[1])
 
+        for link in d["link"]:
+            link["tmp_span"] = deepcopy(link["span"])
+
         tmp = re.sub("\s", "", d["source_text"])
         for i in range(len(d["link"])):
             link = d["link"][i]
-            link["span"][0] -= bisect.bisect_right(space_offsets, link["span"][0]) - 1
-            link["span"][1] -= bisect.bisect_right(space_offsets, link["span"][1]) - 1
+            link["tmp_span"][0] -= (
+                bisect.bisect_right(space_offsets, link["tmp_span"][0]) - 1
+            )
+            link["tmp_span"][1] -= (
+                bisect.bisect_right(space_offsets, link["tmp_span"][1]) - 1
+            )
 
             surf = re.sub("\s", "", link["surf"])
-            span = tmp[link["span"][0] : link["span"][1]]
+            span = tmp[link["tmp_span"][0] : link["tmp_span"][1]]
             assert surf == span, f"{surf} != {span}"
 
         # トークナイズ
@@ -258,29 +266,32 @@ def tokenize(inputs):
             d["offset"].append(d["offset"][-1] + len(token))
 
         for link in d["link"]:
-            s_off = bisect.bisect_left(d["offset"], link["span"][0])
-            if d["offset"][s_off] != link["span"][0]:
+            s_off = bisect.bisect_left(d["offset"], link["tmp_span"][0])
+            if d["offset"][s_off] != link["tmp_span"][0]:
                 s_off -= 1
-            e_off = bisect.bisect_left(d["offset"], link["span"][1])
+            e_off = bisect.bisect_left(d["offset"], link["tmp_span"][1])
 
             link["token_span"] = [s_off, e_off]
 
             try:
                 check = (
-                    d["offset"][s_off] != link["span"][0]
-                    or d["offset"][e_off] != link["span"][1]
+                    d["offset"][s_off] != link["tmp_span"][0]
+                    or d["offset"][e_off] != link["tmp_span"][1]
                 )
             except IndexError:
                 assert False, (d["title"], d["text"][-50:], link)
             checks.append(check)
+
+            del link["tmp_span"]
 
         d["entity_token_ids"] = tokenizer.convert_tokens_to_ids(d["entity_tokens"])
         d["mention_token_ids"] = tokenizer.convert_tokens_to_ids(d["mention_tokens"])
 
         del d["text"]
         del d["entity_tokens"]
+        del d["offset"]
 
-    output_path = os.path.join(output_dir, f"{data_id}.json")
+    output_path = os.path.join(output_dir, f"{data_id}.jsonl")
     save_jsonl(output_path, data)
 
     return checks
@@ -315,7 +326,7 @@ def main():
     for d in data:
         d["count"] = link_count.get(d["pageid"], 0)
 
-    sub_dir, _ = os.path.splitext(os.path.basename(args.cirrus_path))
+    sub_dir, *_ = os.path.basename(args.cirrus_path).split(".")
     output_dir = os.path.join(args.output_dir, sub_dir)
     os.makedirs(output_dir, exist_ok=True)
 
