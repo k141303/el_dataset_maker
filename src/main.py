@@ -326,7 +326,7 @@ def main():
     for d in data:
         d["count"] = link_count.get(d["pageid"], 0)
 
-    sub_dir, *_ = os.path.basename(args.cirrus_path).split(".")
+    sub_dir, *_ = os.path.basename(args.cirrus_path.rstrip(os.path.sep)).split(".")
     output_dir = os.path.join(args.output_dir, sub_dir)
     os.makedirs(output_dir, exist_ok=True)
 
