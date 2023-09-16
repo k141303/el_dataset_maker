@@ -320,11 +320,12 @@ def main():
     for d in data:
         for link in d["link"]:
             link["pageid"] = title2pageid.get(link["title"])
-            if link["pageid"] is not None and d["link"]:
-                link_count[link["pageid"]] += 1
+            if link["pageid"] is None or d["pageid"] == link["pageid"]:
+                continue
+            link_count[link["pageid"]] += 1
 
     for d in data:
-        d["count"] = link_count.get(d["pageid"], 0)
+        d["pop"] = link_count.get(d["pageid"], 0)
 
     sub_dir, *_ = os.path.basename(args.cirrus_path.rstrip(os.path.sep)).split(".")
     output_dir = os.path.join(args.output_dir, sub_dir)
